@@ -199,67 +199,83 @@ DECLARE_ACTION_FMT(WriteScreen)
 // }}}
 #undef DECLARE_ACTION_FMT
 
-#define HANDLE_ACTION(T)                                                  \
-    if (std::holds_alternative<contour::actions::T>(_action))             \
-    {                                                                     \
-        name = fmt::format("{}", std::get<contour::actions::T>(_action)); \
-    }
-
 template <>
 struct fmt::formatter<contour::actions::Action>: fmt::formatter<std::string>
 {
     auto format(contour::actions::Action const& _action, format_context& ctx) -> format_context::iterator
     {
+        using namespace contour::actions;
         std::string name = "Unknown action";
+
+        auto handleAction = [&]<class T>(T&& a) {
+            if (std::holds_alternative<T>(_action))
+            {
+                if constexpr (std::is_same<T, PasteClipboard>::value)
+                {
+                    auto paste = std::get<PasteClipboard>(_action);
+                    name = fmt::format("{}, strip: {}", paste, paste.strip);
+                }
+                else if constexpr (std::is_same<T, WriteScreen>::value)
+                {
+                    auto act = std::get<WriteScreen>(_action);
+                    name = fmt::format("{}, chars: '{}' ", act, act.chars);
+                }
+                else
+                {
+                    name = fmt::format("{}", std::get<T>(_action));
+                }
+            }
+        };
+
         // {{{ handle
-        HANDLE_ACTION(CancelSelection);
-        HANDLE_ACTION(ChangeProfile);
-        HANDLE_ACTION(ClearHistoryAndReset);
-        HANDLE_ACTION(CopyPreviousMarkRange);
-        HANDLE_ACTION(CopySelection);
-        HANDLE_ACTION(CreateDebugDump);
-        HANDLE_ACTION(DecreaseFontSize);
-        HANDLE_ACTION(DecreaseOpacity);
-        HANDLE_ACTION(FocusNextSearchMatch);
-        HANDLE_ACTION(FocusPreviousSearchMatch);
-        HANDLE_ACTION(FollowHyperlink);
-        HANDLE_ACTION(IncreaseFontSize);
-        HANDLE_ACTION(IncreaseOpacity);
-        HANDLE_ACTION(NewTerminal);
-        HANDLE_ACTION(NoSearchHighlight);
-        HANDLE_ACTION(OpenConfiguration);
-        HANDLE_ACTION(OpenFileManager);
-        HANDLE_ACTION(OpenSelection);
-        HANDLE_ACTION(PasteClipboard);
-        HANDLE_ACTION(PasteSelection);
-        HANDLE_ACTION(Quit);
-        HANDLE_ACTION(ReloadConfig);
-        HANDLE_ACTION(ResetConfig);
-        HANDLE_ACTION(ResetFontSize);
-        HANDLE_ACTION(ScreenshotVT);
-        HANDLE_ACTION(ScrollDown);
-        HANDLE_ACTION(ScrollMarkDown);
-        HANDLE_ACTION(ScrollMarkUp);
-        HANDLE_ACTION(ScrollOneDown);
-        HANDLE_ACTION(ScrollOneUp);
-        HANDLE_ACTION(ScrollPageDown);
-        HANDLE_ACTION(ScrollPageUp);
-        HANDLE_ACTION(ScrollToBottom);
-        HANDLE_ACTION(ScrollToTop);
-        HANDLE_ACTION(ScrollUp);
-        HANDLE_ACTION(SearchReverse);
-        HANDLE_ACTION(SendChars);
-        HANDLE_ACTION(ToggleAllKeyMaps);
-        HANDLE_ACTION(ToggleFullscreen);
-        HANDLE_ACTION(ToggleInputProtection);
-        HANDLE_ACTION(ToggleStatusLine);
-        HANDLE_ACTION(ToggleTitleBar);
-        HANDLE_ACTION(TraceBreakAtEmptyQueue);
-        HANDLE_ACTION(TraceEnter);
-        HANDLE_ACTION(TraceLeave);
-        HANDLE_ACTION(TraceStep);
-        HANDLE_ACTION(ViNormalMode);
-        HANDLE_ACTION(WriteScreen);
+        handleAction(CancelSelection());
+        handleAction(ChangeProfile());
+        handleAction(ClearHistoryAndReset());
+        handleAction(CopyPreviousMarkRange());
+        handleAction(CopySelection());
+        handleAction(CreateDebugDump());
+        handleAction(DecreaseFontSize());
+        handleAction(DecreaseOpacity());
+        handleAction(FocusNextSearchMatch());
+        handleAction(FocusPreviousSearchMatch());
+        handleAction(FollowHyperlink());
+        handleAction(IncreaseFontSize());
+        handleAction(IncreaseOpacity());
+        handleAction(NewTerminal());
+        handleAction(NoSearchHighlight());
+        handleAction(OpenConfiguration());
+        handleAction(OpenFileManager());
+        handleAction(OpenSelection());
+        handleAction(PasteClipboard());
+        handleAction(PasteSelection());
+        handleAction(Quit());
+        handleAction(ReloadConfig());
+        handleAction(ResetConfig());
+        handleAction(ResetFontSize());
+        handleAction(ScreenshotVT());
+        handleAction(ScrollDown());
+        handleAction(ScrollMarkDown());
+        handleAction(ScrollMarkUp());
+        handleAction(ScrollOneDown());
+        handleAction(ScrollOneUp());
+        handleAction(ScrollPageDown());
+        handleAction(ScrollPageUp());
+        handleAction(ScrollToBottom());
+        handleAction(ScrollToTop());
+        handleAction(ScrollUp());
+        handleAction(SearchReverse());
+        handleAction(SendChars());
+        handleAction(ToggleAllKeyMaps());
+        handleAction(ToggleFullscreen());
+        handleAction(ToggleInputProtection());
+        handleAction(ToggleStatusLine());
+        handleAction(ToggleTitleBar());
+        handleAction(TraceBreakAtEmptyQueue());
+        handleAction(TraceEnter());
+        handleAction(TraceLeave());
+        handleAction(TraceStep());
+        handleAction(ViNormalMode());
+        handleAction(WriteScreen());
         // }}}
         return formatter<string_view>::format(name, ctx);
     }
@@ -287,5 +303,4 @@ struct fmt::formatter<contour::actions::CopyFormat>
     }
 };
 
-#undef HANDLE_ACTION
 // ]}}

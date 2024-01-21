@@ -148,7 +148,7 @@ struct fmt::formatter<crispy::flags<Enum>>: public fmt::formatter<std::string>
                 continue;
 
             if (!result.empty())
-                result += '|';
+                result += ',';
 
             result += element;
         }

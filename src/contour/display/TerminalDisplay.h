@@ -225,7 +225,7 @@ class TerminalDisplay: public QQuickItem
                                                             vtbackend::Height::cast_from(height()) };
         return pageSizeForPixels(availablePixels,
                                  _renderer->gridMetrics().cellSize,
-                                 applyContentScale(_session->profile().margins, _session->contentScale()));
+                                 applyContentScale(_session->profile().margins.get(), _session->contentScale()));
     }
 
     void updateMinimumSize();

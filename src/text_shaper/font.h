@@ -174,7 +174,7 @@ struct font_description
     font_weight weight = font_weight::normal;
     font_slant slant = font_slant::normal;
     font_spacing spacing = font_spacing::proportional;
-    bool strictSpacing = false;
+    bool strictSpacing = false; // TODO Default value used in config.h while loading fonts
 
     std::vector<font_feature> features;
 
@@ -206,6 +206,7 @@ struct font_metrics
     int underlineThickness;
 };
 
+// use boxed type
 struct font_size
 {
     double pt;

@@ -628,6 +628,7 @@ struct fmt::formatter<vtbackend::Modifier>: formatter<std::string_view>
     }
 };
 
+
 template <>
 struct fmt::formatter<vtbackend::InputGenerator::MouseWheelMode>: formatter<std::string_view>
 {
