@@ -2,40 +2,24 @@
 #include <contour/Actions.h>
 #include <contour/Config.h>
 
-#include <vtbackend/ColorPalette.h>
-#include <vtbackend/ControlCode.h>
-#include <vtbackend/InputGenerator.h>
 #include <vtbackend/TerminalState.h>
-#include <vtbackend/primitives.h>
-
-#include <vtpty/Process.h>
-
-#include <text_shaper/mock_font_locator.h>
 
 #include <crispy/StrongHash.h>
 #include <crispy/escape.h>
-#include <crispy/logstore.h>
-#include <crispy/overloaded.h>
-#include <crispy/utils.h>
-
-#include <yaml-cpp/node/detail/iterator_fwd.h>
-#include <yaml-cpp/ostream_wrapper.h>
-#include <yaml-cpp/yaml.h>
 
 #include <QtCore/QFile>
 #include <QtGui/QOpenGLContext>
 
 #include <algorithm>
 #include <array>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <set>
 #include <sstream>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
+
+#include "contour/ConfigDocumentation.h"
 
 #if defined(_WIN32)
     #include <Windows.h>
@@ -818,7 +802,8 @@ void YAMLVisitor::loadFromEntry(YAML::Node node, std::string entry, ColorConfig&
     {
         if (child.IsMap())
         {
-            where = DualColorConfig {};
+            where = DualColorConfig { .colorSchemeLight = child["light"].as<std::string>(),
+                                      .colorSchemeDark = child["dark"].as<std::string>() };
             loadFromEntry(doc["color_schemes"],
                           child["dark"].as<std::string>(),
                           std::get<DualColorConfig>(where).darkMode);
@@ -828,7 +813,7 @@ void YAMLVisitor::loadFromEntry(YAML::Node node, std::string entry, ColorConfig&
         }
         else
         {
-            where = SimpleColorConfig {};
+            where = SimpleColorConfig { .colorScheme = child.as<std::string>() };
             loadFromEntry(
                 doc["color_schemes"], child.as<std::string>(), std::get<SimpleColorConfig>(where).colors);
         }
@@ -1579,9 +1564,11 @@ std::string YAMLConfigWriter::createString(Config const& c)
         doc.append(format(addOffset(v.documentation, Offset::levels * 4), v.get()));
     };
 
-    auto processWithDoc = [&](auto docString, auto... val) {
-        doc.append(fmt::format(fmt::runtime(format(addOffset(docString, Offset::levels * 4), val...)),
-                               fmt::arg("comment", "#")));
+    auto processWithDoc = [&](auto&& docString, auto... val) {
+        doc.append(
+            fmt::format(fmt::runtime(format(
+                            addOffset(std::string(docString.value), Offset::levels * 4), val...)),
+                        fmt::arg("comment", "#")));
     };
 
     process(c.platformPlugin);
@@ -1704,7 +1691,7 @@ std::string YAMLConfigWriter::createString(Config const& c)
                     process(entry.backgroundBlur);
                 }
 
-                // process(entry.colors,8); // TODO(pr)
+                process(entry.colors);
 
                 doc.append(addOffset("\n"
                                      "hyperlink_decoration:\n",
@@ -1734,15 +1721,8 @@ std::string YAMLConfigWriter::createString(Config const& c)
                                        fmt::arg("comment", "#")));
                 {
                     Offset _;
-                    processWithDoc("{comment} Default colors\n"
-                                   "default:\n"
-                                   "    {comment} Default background color (this can be made "
-                                   "transparent, see above).\n"
-                                   "    background: {}\n"
-                                   "    {comment} Default foreground text color.\n"
-                                   "    foreground: {}\n",
-                                   entry.defaultBackground,
-                                   entry.defaultForeground);
+                    processWithDoc(
+                        documentation::DefaultColors, entry.defaultBackground, entry.defaultForeground);
 
                     // processWithDoc("# Background image support.\n"
                     //                "background_image:\n"
@@ -1774,180 +1754,65 @@ std::string YAMLConfigWriter::createString(Config const& c)
                     //                covered otherwise.\n" "    #\n" "    text: {}\n",
                     //                entry.cursor.color, entry.cursor.textOverrideColor);
 
-                    processWithDoc("\n"
-                                   "{comment} color to pick for hyperlinks decoration, when hovering\n"
-                                   "hyperlink_decoration:\n"
-                                   "    normal: {}\n"
-                                   "    hover: {}\n",
+                    processWithDoc(documentation::HyperlinkDecoration,
                                    entry.hyperlinkDecoration.normal,
                                    entry.hyperlinkDecoration.hover);
 
-                    processWithDoc("\n"
-                                   "{comment} Color to pick for vi_mode highlights.\n"
-                                   "{comment} The value format is equivalent to how selection colors and "
-                                   "alpha contribution "
-                                   "is defined.\n"
-                                   "vi_mode_highlight:\n"
-                                   "    foreground: {}\n"
-                                   "    foreground_alpha: {}\n"
-                                   "    background: {}\n"
-                                   "    background_alpha: {}\n",
+                    processWithDoc(documentation::YankHighlight,
                                    entry.yankHighlight.foreground,
                                    entry.yankHighlight.foregroundAlpha,
                                    entry.yankHighlight.background,
                                    entry.yankHighlight.backgroundAlpha);
 
-                    processWithDoc(
-                        "\n"
-                        "{comment} Color override for the current cursor's line when in vi_mode:\n"
-                        "{comment} The value format is equivalent to how selection colors and alpha "
-                        "contribution "
-                        "is defined.\n"
-                        "{comment} To disable cursorline in vi_mode, set foreground to CellForeground "
-                        "and "
-                        "background to CellBackground.\n"
-                        "vi_mode_cursorline:\n"
-                        "    foreground: {}\n"
-                        "    foreground_alpha: {}\n"
-                        "    background: {}\n"
-                        "    background_alpha: {}\n",
-                        entry.normalModeCursorline.foreground,
-                        entry.normalModeCursorline.foregroundAlpha,
-                        entry.normalModeCursorline.background,
-                        entry.normalModeCursorline.backgroundAlpha);
+                    processWithDoc(documentation::NormalModeCursorline,
+                                   entry.normalModeCursorline.foreground,
+                                   entry.normalModeCursorline.foregroundAlpha,
+                                   entry.normalModeCursorline.background,
+                                   entry.normalModeCursorline.backgroundAlpha);
 
-                    processWithDoc(
-                        "\n"
-                        "{comment} The text selection color can be customized here.\n"
-                        "{comment} Leaving a value empty will default to the inverse of the content's "
-                        "color "
-                        "values.\n"
-                        "{comment}\n"
-                        "{comment} The color can be specified in RGB as usual, plus\n"
-                        "{comment} - CellForeground: Selects the cell's foreground color.\n"
-                        "{comment} - CellBackground: Selects the cell's background color.\n"
-                        "selection:\n"
-                        "    {comment} Specifies the color to be used for the selected text.\n"
-                        "    {comment}\n"
-                        "    foreground: {}\n"
-                        "    {comment} Specifies the alpha value (between 0.0 and 1.0) the configured "
-                        "foreground "
-                        "color\n"
-                        "    {comment} will contribute to the original color.\n"
-                        "    {comment}\n"
-                        "    {comment} A value of 1.0 will paint over, whereas a value of 0.5 will give\n"
-                        "    {comment} a look of a half-transparently painted grid cell.\n"
-                        "    foreground_alpha: {}\n"
-                        "    {comment} Specifies the color to be used for the selected background.\n"
-                        "    {comment}\n"
-                        "    background: {}\n"
-                        "    {comment} Specifies the alpha value (between 0.0 and 1.0) the configured "
-                        "background "
-                        "color\n"
-                        "    {comment} will contribute to the original color.\n"
-                        "    {comment}\n"
-                        "    {comment} A value of 1.0 will paint over, whereas a value of 0.5 will give\n"
-                        "    {comment} a look of a half-transparently painted grid cell.\n"
-                        "    background_alpha: {}\n",
-                        entry.selection.foreground,
-                        entry.selection.foregroundAlpha,
-                        entry.selection.background,
-                        entry.selection.backgroundAlpha);
+                    processWithDoc(documentation::Selection,
+                                   entry.selection.foreground,
+                                   entry.selection.foregroundAlpha,
+                                   entry.selection.background,
+                                   entry.selection.backgroundAlpha);
 
-                    processWithDoc("\n"
-                                   "{comment} Search match highlighting. Similar to selection highlighting.\n"
-                                   "search_highlight:\n"
-                                   "    foreground: {}\n"
-                                   "    foreground_alpha: {}\n"
-                                   "    background: {}\n"
-                                   "    background_alpha: {}\n",
+                    processWithDoc(documentation::SearchHighlight,
                                    entry.searchHighlight.foreground,
                                    entry.searchHighlight.foregroundAlpha,
                                    entry.searchHighlight.background,
                                    entry.searchHighlight.backgroundAlpha);
 
-                    processWithDoc("\n"
-                                   "{comment} Search match highlighting (focused term). Similar to selection "
-                                   "highlighting.\n"
-                                   "search_highlight_focused:\n"
-                                   "    foreground: {}\n"
-                                   "    foreground_alpha: {}\n"
-                                   "    background: {}\n"
-                                   "    background_alpha: {}\n",
+                    processWithDoc(documentation::SearchHighlihtFocused,
                                    entry.searchHighlightFocused.foreground,
                                    entry.searchHighlightFocused.foregroundAlpha,
                                    entry.searchHighlightFocused.background,
                                    entry.searchHighlightFocused.backgroundAlpha);
 
-                    processWithDoc(
-                        "\n"
-                        "{comment} Coloring for the word that is highlighted due to double-clicking it.\n"
-                        "{comment}\n"
-                        "{comment} The format is similar to selection highlighting.\n"
-                        "word_highlight_current:\n"
-                        "    foreground: {}\n"
-                        "    foreground_alpha: {}\n"
-                        "    background: {}\n"
-                        "    background_alpha: {}\n",
-                        entry.wordHighlightCurrent.foreground,
-                        entry.wordHighlightCurrent.foregroundAlpha,
-                        entry.wordHighlightCurrent.background,
-                        entry.wordHighlightCurrent.backgroundAlpha);
+                    processWithDoc(documentation::WordHighlightCurrent,
+                                   entry.wordHighlightCurrent.foreground,
+                                   entry.wordHighlightCurrent.foregroundAlpha,
+                                   entry.wordHighlightCurrent.background,
+                                   entry.wordHighlightCurrent.backgroundAlpha);
 
-                    processWithDoc(
-                        "\n"
-                        "{comment} Coloring for the word that is highlighted due to double-clicking\n"
-                        "{comment} another word that matches this word.\n"
-                        "{comment}\n"
-                        "{comment} The format is similar to selection highlighting.\n"
-                        "word_highlight_other:\n"
-                        "    foreground: {}\n"
-                        "    foreground_alpha: {}\n"
-                        "    background: {}\n"
-                        "    background_alpha: {}\n",
-                        entry.wordHighlight.foreground,
-                        entry.wordHighlight.foregroundAlpha,
-                        entry.wordHighlight.background,
-                        entry.wordHighlight.backgroundAlpha);
+                    processWithDoc(documentation::WordHighlight,
+                                   entry.wordHighlight.foreground,
+                                   entry.wordHighlight.foregroundAlpha,
+                                   entry.wordHighlight.background,
+                                   entry.wordHighlight.backgroundAlpha);
 
-                    processWithDoc("\n"
-                                   "{comment} Defines the colors to be used for the Indicator status line.\n"
-                                   "{comment} Values must be in RGB form.\n"
-                                   "indicator_statusline:\n"
-                                   "    foreground: {}\n"
-                                   "    background: {}\n",
+                    processWithDoc(documentation::IndicatorStatusLine,
                                    entry.indicatorStatusLine.foreground,
                                    entry.indicatorStatusLine.background);
 
-                    processWithDoc(
-                        "\n"
-                        "{comment} Alternate colors to be used for the indicator status line when\n"
-                        "{comment} this terminal is currently not in focus.\n"
-                        "indicator_statusline_inactive:\n"
-                        "    foreground: {}\n"
-                        "    background: {}\n",
-                        entry.indicatorStatusLineInactive.foreground,
-                        entry.indicatorStatusLineInactive.background);
+                    processWithDoc(documentation::IndicatorStatusLineInactive,
+                                   entry.indicatorStatusLineInactive.foreground,
+                                   entry.indicatorStatusLineInactive.background);
 
-                    processWithDoc("\n"
-                                   "{comment} Colors for the IME (Input Method Editor) area.\n"
-                                   "input_method_editor:\n"
-                                   "    foreground: {}\n"
-                                   "    background: {}\n",
+                    processWithDoc(documentation::InputMethodEditor,
                                    entry.inputMethodEditor.foreground,
                                    entry.inputMethodEditor.background);
 
-                    processWithDoc("\n"
-                                   "{comment} Normal colors\n"
-                                   "normal:\n"
-                                   "    black:   {}\n"
-                                   "    red:     {}\n"
-                                   "    green:   {}\n"
-                                   "    yellow:  {}\n"
-                                   "    blue:    {}\n"
-                                   "    magenta: {}\n"
-                                   "    cyan:    {}\n"
-                                   "    white:   {}\n",
+                    processWithDoc(documentation::NormalColors,
                                    entry.normalColor(0),
                                    entry.normalColor(1),
                                    entry.normalColor(2),
@@ -1957,17 +1822,7 @@ std::string YAMLConfigWriter::createString(Config const& c)
                                    entry.normalColor(6),
                                    entry.normalColor(7));
 
-                    processWithDoc("\n"
-                                   "{comment} Bright colors\n"
-                                   "bright:\n"
-                                   "    black:   {}\n"
-                                   "    red:     {}\n"
-                                   "    green:   {}\n"
-                                   "    yellow:  {}\n"
-                                   "    blue:    {}\n"
-                                   "    magenta: {}\n"
-                                   "    cyan:    {}\n"
-                                   "    white:   {}\n",
+                    processWithDoc(documentation::BrightColors,
                                    entry.brightColor(0),
                                    entry.brightColor(1),
                                    entry.brightColor(2),
@@ -1977,18 +1832,7 @@ std::string YAMLConfigWriter::createString(Config const& c)
                                    entry.brightColor(6),
                                    entry.brightColor(7));
 
-                    processWithDoc("\n"
-                                   "{comment} Dim (faint) colors, if not set, they're automatically computed "
-                                   "based on normal colors.\n"
-                                   "{comment} dim:\n"
-                                   "{comment}     black:   {}\n"
-                                   "{comment}     red:     {}\n"
-                                   "{comment}     green:   {}\n"
-                                   "{comment}     yellow:  {}\n"
-                                   "{comment}     blue:    {}\n"
-                                   "{comment}     magenta: {}\n"
-                                   "{comment}     cyan:    {}\n"
-                                   "{comment}     white:   {}\n",
+                    processWithDoc(documentation::DimColors,
                                    entry.dimColor(0),
                                    entry.dimColor(1),
                                    entry.dimColor(2),
